@@ -1,0 +1,7 @@
+<clickhouse>
+    <background_pool_size>2</background_pool_size>
+    <background_schedule_pool_size>2</background_schedule_pool_size>
+    <background_move_pool_size>1</background_move_pool_size>
+
+    <max_thread_pool_size>128</max_thread_pool_size>
+</clickhouse>

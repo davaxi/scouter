@@ -143,7 +143,7 @@ Scouter ships with a production-ready `docker-compose.yml`. One-click deploy on 
 ### Deploy from Docker Hub (no source code on the server)
 
 Every version tag publishes prebuilt images (`linux/amd64` + `linux/arm64`) to
-Docker Hub: `davaxi/scouter-{app,crawler,renderer,mcp,postgres}`.
+Docker Hub: `davaxi/scouter-{app,crawler,renderer,mcp,postgres,clickhouse}`.
 The production `docker-compose.yml` pulls them, so the server only needs that
 file and a `.env`:
 

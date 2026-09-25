@@ -48,6 +48,7 @@ services:
       # comme en prod (docker-compose.yml). L'ancien chemin ./docker/clickhouse/init.sql
       # n'existe pas et faisait échouer/diverger l'install locale à neuf.
       - ./crawler-go/internal/db/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
+      - ./docker/clickhouse/config.d/disable-logs.xml:/etc/clickhouse-server/config.d/disable-logs.xml:ro,z
     restart: unless-stopped
     networks:
       - scouter-net

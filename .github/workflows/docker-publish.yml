@@ -1,7 +1,7 @@
 name: Docker publish
 
 # Builds every Scouter image and pushes it to Docker Hub
-# (<namespace>/scouter-{app,crawler,renderer,mcp,postgres}) when a
+# (<namespace>/scouter-{app,crawler,renderer,mcp,postgres,clickhouse}) when a
 # version tag is pushed: `git tag 0.8.0 && git push origin 0.8.0`.
 #
 # Required repository secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (a Docker Hub
@@ -41,6 +41,8 @@ jobs:
             context: mcp
           - image: postgres
             context: docker/postgres
+          - image: clickhouse
+            context: docker/clickhouse
     env:
       IMAGE: ${{ vars.DOCKERHUB_NAMESPACE || 'davaxi' }}/scouter-${{ matrix.image }}
 

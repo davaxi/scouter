@@ -46,17 +46,13 @@ services:
   # ClickHouse — entrepôt des données de crawl (pages/links/html + post-proc).
   # PostgreSQL garde la frontier + les métadonnées. Voir clickhouse.md.
   clickhouse:
-    image: clickhouse/clickhouse-server:24-alpine
-    # ClickHouse 24 détecte le cgroup memory.max et borne automatiquement son
-    # max_server_memory_usage (~90%), donc ce mem_limit suffit à l'empêcher de
-    # grignoter toute la RAM via les merges/cache de requêtes sur la durée.
-    # Fallback à 6g (CH = service le plus lourd, source de vérité des données) ;
-    # autosize.sh le remplace par ~30% de la RAM hôte quand start.sh est utilisé.
-    mem_limit: ${CLICKHOUSE_MEM_LIMIT:-6g}
-    # Interactif (sert les rapports PHP). Le travail background du crawler dans CH
-    # est déjà rendu "nice" au niveau threads (os_thread_priority, voir crawler-go),
-    # donc le conteneur garde un poids élevé pour ne pas pénaliser les rapports.
-    cpu_shares: 2048
+    # = clickhouse-server:24-alpine + docker/clickhouse/config.d (system logs off).
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-clickhouse:${SCOUTER_VERSION:-latest}
+    # Pas de mem_limit ni de cpu_shares : ClickHouse gère lui-même sa mémoire
+    # (max_server_memory_usage ≈ 90% de la RAM visible) et ses pools de threads.
+    # Les system logs (text_log, metric_log, trace_log…) sont désactivés dans
+    # l'image (docker/clickhouse/config.d/disable-logs.xml) : ils écrivaient en
+    # continu sur disque et grossissaient sans limite sans servir à Scouter.
     environment:
       - CLICKHOUSE_DB=${CLICKHOUSE_DB:-scouter}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-scouter}
