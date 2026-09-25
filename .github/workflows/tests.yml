@@ -3,6 +3,8 @@ name: Tests
 on:
   pull_request:
     branches: [main, develop]
+  # Reused by docker-publish.yml: images are only pushed if the tests pass.
+  workflow_call:
 
 jobs:
   tests:

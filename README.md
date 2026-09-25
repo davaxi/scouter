@@ -140,6 +140,26 @@ Then open [http://localhost:8080](http://localhost:8080) and create your admin a
 
 Scouter ships with a production-ready `docker-compose.yml`. One-click deploy on [Coolify](https://coolify.io/) or any Docker host.
 
+### Deploy from Docker Hub (no source code on the server)
+
+Every version tag publishes prebuilt images (`linux/amd64` + `linux/arm64`) to
+Docker Hub: `davaxi/scouter-{app,crawler,renderer,mcp,postgres}`.
+The production `docker-compose.yml` pulls them, so the server only needs that
+file and a `.env`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/davaxi/scouter/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/davaxi/scouter/main/.env.example -o .env
+# edit .env (passwords, SCOUTER_ENCRYPTION_KEY, SCOUTER_VERSION=<tag>)
+docker compose pull && docker compose up -d
+```
+
+Upgrade: bump `SCOUTER_VERSION` in `.env`, then `docker compose pull && docker compose up -d`.
+
+Releasing (maintainers): `git tag 0.8.0 && git push origin 0.8.0` runs the tests,
+then `.github/workflows/docker-publish.yml` pushes `:0.8.0`, `:0.8` and `:latest`.
+It needs the `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repository secrets.
+
 ### Upgrading
 
 Pull and re-run `./start.sh`:
@@ -159,7 +179,7 @@ touches the `postgres_data` volume.
 > needs internet). Crawls stay `queued` until it's up, so check
 > `docker compose -f docker-compose.local.yml logs -f crawler-go`
 > (it should print *"Go crawler started"*). On production (`docker-compose.yml`),
-> just redeploy/rebuild so the Go binary is built.
+> just pull the new images (`docker compose pull && docker compose up -d`).
 
 ---
 

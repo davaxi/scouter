@@ -1,7 +1,7 @@
 services:
   # Base de données PostgreSQL (avec init.sql intégré)
   postgres:
-    build: ./docker/postgres
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-postgres:${SCOUTER_VERSION:-latest}
     # Les mem_limit sont AUTO-DIMENSIONNÉS par scripts/autosize.sh en fraction de
     # la RAM réelle de l'hôte (lancé par start.sh ; sourcé dans .env.autosize). Sur
     # Coolify : lancer scripts/autosize.sh une fois OU poser ces vars dans l'UI. La
@@ -87,7 +87,7 @@ services:
 
   # Application PHP principale (Le cerveau)
   scouter:
-    build: .
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-app:${SCOUTER_VERSION:-latest}
     mem_limit: ${SCOUTER_MEM_LIMIT:-1g}
     cpu_shares: 2048 # interactif (UI + API) — priorité face aux crawls sous charge
     expose:
@@ -154,7 +154,7 @@ services:
   # nginx (dans le conteneur scouter) proxifie /mcp vers ce service. L'auth est
   # un simple passthrough du header Authorization: Bearer sctr_… vers l'API.
   mcp:
-    build: ./mcp
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-mcp:${SCOUTER_VERSION:-latest}
     mem_limit: ${MCP_MEM_LIMIT:-256m}
     cpu_shares: 512 # léger adaptateur, background
     expose:
@@ -168,7 +168,7 @@ services:
 
   # Service Worker 1 (Base & Anchor)
   worker-1: &worker-base
-    build: .
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-app:${SCOUTER_VERSION:-latest}
     # Limites héritées par worker-2..4 via l'ancre YAML : défaut 384m × 4 = 1,5 Go.
     mem_limit: ${WORKER_MEM_LIMIT:-384m}
     cpu_shares: 512 # jobs background (delete / batch-categorize / bulk-ai) — hérité par worker-2..4
@@ -229,7 +229,7 @@ services:
   # multiple concurrent crawls (MAX_CONCURRENT_CRAWLS). Claims ONLY
   # command='crawl' jobs; cohabits with the PHP workers above.
   crawler-go:
-    build: ./crawler-go
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-crawler:${SCOUTER_VERSION:-latest}
     # mem_limit pose le cgroup memory.max lu par applyMemoryLimit → GOMEMLIMIT ≈
     # 90% = ~1,8 Go : le GC Go réclame avant de déborder, ce qui empêche le creep
     # mémoire des longs crawls (very_slow) de finir en OOM hôte.
@@ -325,7 +325,7 @@ services:
 
   # Service de rendu JavaScript (Puppeteer) - Multiple instances pour parallélisme
   renderer-1: &renderer-base
-    build: ./renderer
+    image: ${SCOUTER_REGISTRY:-davaxi}/scouter-renderer:${SCOUTER_VERSION:-latest}
     # Borne Chrome (gros consommateur). Hérité par renderer-2/3 : défaut 1 Go × 3 = 3 Go.
     # Si Chrome dépasse, ce conteneur est OOM-killé + redémarré sans toucher l'hôte.
     mem_limit: ${RENDERER_MEM_LIMIT:-1g}
