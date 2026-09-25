@@ -1,7 +1,26 @@
-vendor/
+# Only the PHP app goes into davaxi/scouter-app: the other services have their
+# own build context (crawler-go/, renderer/, mcp/, docker/postgres/).
 .git
+.github
 .gitignore
+.dockerignore
+.env
+.env.*
+!.env.example
+.claude
+.phpunit.cache
+Dockerfile
+docker-compose*.yml
+crawler-go/
+renderer/
+mcp/
+docker/postgres/
+vendor/
+node_modules/
+logs/
+crawls/
+storage/
+composer.phar
 *.log
 *.pid
 *.bat
-node_modules/

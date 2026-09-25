@@ -1,0 +1,5 @@
+# Locally built binary — the image compiles its own.
+scouter-renderer
+Dockerfile
+.dockerignore
+README.md

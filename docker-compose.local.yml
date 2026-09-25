@@ -61,7 +61,11 @@ services:
 
   # Application PHP principale
   scouter:
-    build: .
+    build:
+      context: .
+      # Garde require-dev (pest) pour `docker exec scouter ./vendor/bin/pest`.
+      args:
+        COMPOSER_NO_DEV: "0"
     mem_limit: ${SCOUTER_MEM_LIMIT:-1g}
     cpu_shares: 2048 # interactif (UI + API)
     ports:
@@ -119,7 +123,11 @@ services:
 
   # Service Worker (Crawl)
   worker:
-    build: .
+    build:
+      context: .
+      # Garde require-dev (pest) pour `docker exec scouter ./vendor/bin/pest`.
+      args:
+        COMPOSER_NO_DEV: "0"
     # Appliqué à CHACUN des 4 réplicas : défaut 384m × 4 = 1,5 Go.
     mem_limit: ${WORKER_MEM_LIMIT:-384m}
     cpu_shares: 512 # jobs background (delete / batch-categorize / bulk-ai)
