@@ -221,7 +221,7 @@ class CategoryExpr
     }
 
     /** Load the YAML for a crawl: per-crawl snapshot, else project default. */
-    private function loadYaml(int $crawlId): ?string
+    public function loadYaml(int $crawlId): ?string
     {
         $stmt = $this->pg->prepare("SELECT config FROM categorization_config WHERE crawl_id = :cid");
         $stmt->execute([':cid' => $crawlId]);

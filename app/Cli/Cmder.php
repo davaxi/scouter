@@ -181,6 +181,11 @@ class Cmder
           }
       }
 
+      // Segments « Exclure du rapport » : le score dépend des règles qu'on vient
+      // d'écrire dans chaque crawl → on le recalcule (on ne connaît pas l'ancienne
+      // config ici, et la passe ClickHouse est légère).
+      \App\Analysis\CrawlStats::refresh(array_map(fn($c) => (int) $c->id, $crawls));
+
       echo "\n";
       if ($errors === 0) {
           self::info("Batch categorization completed successfully: {$processed}/{$totalCrawls} crawls");

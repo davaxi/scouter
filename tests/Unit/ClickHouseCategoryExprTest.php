@@ -89,3 +89,12 @@ it('matches the pages whose first matching segment is hidden', function () {
     // Rules after the last hidden one can't change the outcome → trimmed.
     expect($cond)->not->toContain("'(?i).*'");
 });
+
+it('detects a segment flagged hidden in a parsed YAML config', function () {
+    $has = fn(string $yaml) => \App\Analysis\CategorizationService::hasHiddenSegment(\Spyc::YAMLLoadString($yaml));
+
+    expect($has("blog:\n  include:\n    - ^/blog\n"))->toBeFalse();
+    expect($has("cf:\n  hidden: true\n  include:\n    - ^/cdn-cgi/\n"))->toBeTrue();
+    expect($has("cf:\n  hidden: false\n  include:\n    - ^/cdn-cgi/\n"))->toBeFalse();
+    expect(\App\Analysis\CategorizationService::hasHiddenSegment(null))->toBeFalse();
+});

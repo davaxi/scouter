@@ -223,9 +223,10 @@ export const TOOLS = [
       '  · exclude : (optional) list of regex; a URL is rejected if any exclude matches, even when include matched.\n' +
       '  · color   : hex color for the dashboard chart (e.g. "#6bd899").\n' +
       '  · dom     : (optional) the domain the rule applies to. OMIT it and Scouter fills in the crawl\'s domain automatically. Only set it to scope a rule to a specific domain.\n' +
+      '  · hidden  : (optional) true = "Exclude from report": the URLs of this category are removed from EVERY report, explorer, SQL result and from the health score (e.g. noise such as Cloudflare\'s /cdn-cgi/l/email-protection). Like any category it only gets the URLs it wins (first match), so put it BEFORE broader categories. get_categorization still counts its URLs.\n' +
       'RULES: patterns are RE2 regex (ClickHouse), case-insensitive, no backreferences/lookarounds; anchor with ^ for "starts with" and $ for end-of-path. ORDER MATTERS — first matching category wins, so list narrow patterns (e.g. homepage ^/?$) before broad ones (e.g. a ".*" catch-all). Names: lowercase snake_case.\n' +
       'EXAMPLE yaml:\n' +
-      'homepage:\n  include:\n    - ^/?$\n  color: "#4ecdc4"\nproduct:\n  include:\n    - ^/p/[0-9]+\n    - ^/product/[^/]+\n  exclude:\n    - /preview\n  color: "#6bd899"\nother:\n  include:\n    - .*\n  color: "#cccccc"\n' +
+      'cloudflare_noise:\n  hidden: true\n  include:\n    - ^/cdn-cgi/\n  color: "#999999"\nhomepage:\n  include:\n    - ^/?$\n  color: "#4ecdc4"\nproduct:\n  include:\n    - ^/p/[0-9]+\n    - ^/product/[^/]+\n  exclude:\n    - /preview\n  color: "#6bd899"\nother:\n  include:\n    - .*\n  color: "#cccccc"\n' +
       'After calling, read deployment.status from the response (or poll get_categorization) to know when the project-wide deploy finished; the targeted crawl itself is already done.',
     inputSchema: {
       type: 'object',

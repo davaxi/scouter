@@ -554,6 +554,14 @@ class ApiV1Controller extends Controller
             return;
         }
 
+        // Segments flagged "Exclure du rapport" (hidden: true) drop pages from every
+        // report and from the score: if the old or the new config has one, every
+        // report fragment and the score need recomputing (as in the UI save flow).
+        $hiddenInvolved = CategorizationService::hasHiddenSegment($categories)
+            || CategorizationService::hasHiddenSegment(
+                \Spyc::YAMLLoadString((string) (new \App\Analysis\CategoryExpr($this->db))->loadYaml($cid))
+            );
+
         // Persist at project level (source of truth) + crawl level.
         $this->projects->setCategorizationConfig($projectId, $yaml);
         $stmt = $this->db->prepare("
@@ -603,9 +611,14 @@ class ApiV1Controller extends Controller
         //     recomputed against their stale categories.
         $reportPrecomputeJobId = null;
         try {
-            \App\Analysis\ReportPrecompute::recompute($cid, true); // category-dependent fragments only
+            \App\Analysis\ReportPrecompute::recompute($cid, !$hiddenInvolved); // category-dependent fragments (all if exclusion)
         } catch (\Throwable $e) {
             error_log('[API categorization] report precompute on crawl ' . $cid . ' failed: ' . $e->getMessage());
+        }
+        // Score of THIS crawl; the other crawls are refreshed by the batch job once
+        // their per-crawl snapshot holds the new rules.
+        if ($hiddenInvolved) {
+            \App\Analysis\CrawlStats::refresh([$cid]);
         }
         if ($deployToProject && $otherCrawls > 0) {
             try {

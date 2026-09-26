@@ -118,6 +118,34 @@ GROUP BY p.crawl_id, t.max_depth";
     }
 
     /**
+     * Recalcule tout de suite les stats dérivées (pages indexables, erreurs
+     * critiques, score santé) de ces crawls — après un changement de segment
+     * « Exclure du rapport ». Seuls les crawls terminés sont concernés ; ceux
+     * absents de ClickHouse repassent à la sentinelle NULL (repli pcHealthScore au
+     * prochain affichage).
+     */
+    public static function refresh(array $crawlIds): void
+    {
+        $crawlIds = array_values(array_unique(array_filter(array_map('intval', $crawlIds))));
+        if (empty($crawlIds)) {
+            return;
+        }
+        try {
+            $pdo = PostgresDatabase::getInstance()->getConnection();
+            $in = implode(',', $crawlIds);
+            $ids = $pdo->query("SELECT id FROM crawls WHERE id IN ($in) AND status IN ('finished','stopped','error')")
+                ->fetchAll(\PDO::FETCH_COLUMN);
+            if (empty($ids)) {
+                return;
+            }
+            $pdo->exec("UPDATE crawls SET health_score = NULL WHERE id IN (" . implode(',', array_map('intval', $ids)) . ")");
+            self::ensureFromClickHouse($ids);
+        } catch (\Throwable $e) {
+            error_log('[CrawlStats] refresh failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Fige un health_score déjà calculé (ex. repli pcHealthScore pour un crawl
      * ABSENT de ClickHouse) afin de poser la sentinelle → plus de recalcul à
      * chaque consultation. Met à jour si la valeur n'est pas encore posée (NULL)

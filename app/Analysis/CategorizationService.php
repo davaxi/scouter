@@ -25,6 +25,25 @@ class CategorizationService
     }
 
     /**
+     * Whether a parsed YAML config has a segment flagged "Exclure du rapport"
+     * (`hidden: true`). Such segments drop pages from every report and from the
+     * score, so saving a config that has one — before or after — calls for a full
+     * report recompute and a score refresh, not just the category-dependent bits.
+     */
+    public static function hasHiddenSegment($categories): bool
+    {
+        if (!is_array($categories)) {
+            return false;
+        }
+        foreach ($categories as $rules) {
+            if (is_array($rules) && filter_var($rules['hidden'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Parse les catégories YAML en règles structurées
      *
      * @param array $categories Catégories parsées depuis YAML

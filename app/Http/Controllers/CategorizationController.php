@@ -83,8 +83,10 @@ class CategorizationController extends Controller
         // Segments cochés « Exclure du rapport » : ils retirent des pages de TOUS les
         // rapports et du score. Si l'ancienne ou la nouvelle config en contient, tout
         // (pas seulement les fragments liés aux catégories) est à recalculer.
-        $hiddenInvolved = $this->hasHiddenSegment($categories)
-            || $this->hasHiddenSegment(\Spyc::YAMLLoadString((string) $this->currentYaml((int) $crawlId, (int) $projectId)));
+        $hiddenInvolved = CategorizationService::hasHiddenSegment($categories)
+            || CategorizationService::hasHiddenSegment(
+                \Spyc::YAMLLoadString((string) (new \App\Analysis\CategoryExpr($this->db))->loadYaml((int) $crawlId))
+            );
 
         // PHASE 1: Save to project level
         $projectRepo = new \App\Database\ProjectRepository();
@@ -136,13 +138,7 @@ class CategorizationController extends Controller
         // Score santé / pages indexables / erreurs critiques des crawls du projet :
         // recalculés tout de suite (ClickHouse) avec les nouvelles exclusions.
         if ($hiddenInvolved) {
-            try {
-                $this->db->prepare("UPDATE crawls SET health_score = NULL WHERE project_id = :p")
-                    ->execute([':p' => $projectId]);
-                \App\Analysis\CrawlStats::ensureFromClickHouse($projectCrawlIds);
-            } catch (\Throwable $e) {
-                error_log('[Categorization] health score refresh failed: ' . $e->getMessage());
-            }
+            \App\Analysis\CrawlStats::refresh($projectCrawlIds);
         }
 
         // PHASE 3: Apply SYNCHRONOUSLY to the current crawl so the user sees
@@ -237,34 +233,6 @@ class CategorizationController extends Controller
         ], $jobId !== null
             ? "Catégorisation appliquée ({$currentCategorized} pages). Les " . count($otherCrawls) . " autre(s) crawl(s) du projet sont en cours de traitement en arrière-plan."
             : "Catégorisation appliquée ({$currentCategorized} pages).");
-    }
-
-    /** Whether a parsed YAML config has a segment flagged "Exclure du rapport". */
-    private function hasHiddenSegment($categories): bool
-    {
-        if (!is_array($categories)) {
-            return false;
-        }
-        foreach ($categories as $rules) {
-            if (is_array($rules) && filter_var($rules['hidden'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** The YAML currently active for a crawl: per-crawl snapshot, else the project's. */
-    private function currentYaml(int $crawlId, int $projectId): ?string
-    {
-        $stmt = $this->db->prepare("SELECT config FROM categorization_config WHERE crawl_id = :c");
-        $stmt->execute([':c' => $crawlId]);
-        $yaml = $stmt->fetchColumn();
-        if (!$yaml) {
-            $stmt = $this->db->prepare("SELECT categorization_config FROM projects WHERE id = :p");
-            $stmt->execute([':p' => $projectId]);
-            $yaml = $stmt->fetchColumn();
-        }
-        return $yaml ? (string) $yaml : null;
     }
 
     /**

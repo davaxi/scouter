@@ -735,7 +735,9 @@ paths:
         (unless deploy_to_project=false). Each category has `include` (regex list
         on the URL PATH), optional `exclude`, `color`, and an optional `dom` —
         omit `dom` (or use the `{dom}` placeholder) to auto-fill the crawl's
-        domain. Patterns are PostgreSQL POSIX (~*, case-insensitive); FIRST MATCH
+        domain — and an optional `hidden: true` ("Exclude from report": the
+        category's URLs are removed from every report and from the health
+        score). Patterns are PostgreSQL POSIX (~*, case-insensitive); FIRST MATCH
         WINS so order matters. Poll GET …/categorization and watch
         deployment.status to know when the project-wide deploy finished. Requires
         management rights on the crawl's project.
