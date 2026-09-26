@@ -41,14 +41,19 @@ class ChPdo
     /** @var array<int,array{0:string,1:string}> per-crawl {catIdExpr, catNameExpr} cache. */
     private array $catCache = [];
     private string $crawlCategoriesSource;
+    /** Keep the pages of segments flagged "Exclure du rapport" (the Segments page needs them). */
+    private bool $includeHidden;
+    /** @var array<string,?string> hidden-pages condition per crawl set. */
+    private array $hiddenCache = [];
     /** Query-cache TTL (s) passed to ClickHouse for report reads; 0 = no caching. */
     private int $cacheTtl = 0;
 
     /** ClickHouse query-cache TTL for an immutable (finished) crawl's reports. */
     private const REPORT_CACHE_TTL = 21600; // 6h
 
-    public function __construct(int $crawlId, ?int $compareId = null)
+    public function __construct(int $crawlId, ?int $compareId = null, bool $includeHidden = false)
     {
+        $this->includeHidden = $includeHidden;
         $this->ch = ClickHouseDatabase::getInstance();
         $this->db = $this->ch->getDatabase();
         $this->crawlId = $crawlId;
@@ -86,6 +91,24 @@ class ChPdo
             $this->catCache[$id] = [$ce->buildIdExpr($rules), $ce->build($rules)];
         }
         return $this->catCache[$id];
+    }
+
+    /**
+     * Condition matching the pages of hidden segments for these crawls (each with
+     * its own rules), or null when nothing is hidden. Hidden pages are dropped
+     * from every virtual table, so reports and scores ignore them entirely.
+     */
+    private function hiddenCond(array $ids): ?string
+    {
+        if ($this->includeHidden) {
+            return null;
+        }
+        $key = implode(',', $ids);
+        if (!array_key_exists($key, $this->hiddenCache)) {
+            $ce = new CategoryExpr(PostgresDatabase::getInstance()->getConnection());
+            $this->hiddenCache[$key] = $ce->hiddenPagesCond($ids);
+        }
+        return $this->hiddenCache[$key];
     }
 
     private function inList(array $ids): string
@@ -221,19 +244,28 @@ class ChPdo
         }
         // Sitemap-only pages are stored at depth=-1 (as in PG, where they have in_crawl=false).
         $cols[] = "toUInt8(p.depth >= 0) AS in_crawl";
+        $hidden = $this->hiddenCond($ids);
+        $notHidden = $hidden !== null ? " AND NOT {$hidden}" : '';
         return "(SELECT " . implode(', ', $cols)
-            . " FROM (SELECT * FROM {$this->db}.pages WHERE crawl_id IN ({$in}) LIMIT 1 BY (crawl_id, id)) p"
+            . " FROM (SELECT * FROM {$this->db}.pages WHERE crawl_id IN ({$in}){$notHidden} LIMIT 1 BY (crawl_id, id)) p"
             . $joins . ")";
     }
 
     private function simpleSourceFor(string $table, array $ids): string
     {
         $in = $this->inList($ids);
+        // Rows attached to a hidden page (see hiddenCond) are dropped as well.
+        $hidden = $this->hiddenCond($ids);
+        $hiddenIds = $hidden !== null
+            ? "(SELECT crawl_id, id FROM {$this->db}.pages WHERE crawl_id IN ({$in}) AND {$hidden})"
+            : null;
         if ($table === 'page_schemas') {
-            return "(SELECT * FROM {$this->db}.page_schemas WHERE crawl_id IN ({$in}) LIMIT 1 BY (crawl_id, page_id, schema_type))";
+            $notHidden = $hiddenIds ? " AND (crawl_id, page_id) NOT IN {$hiddenIds}" : '';
+            return "(SELECT * FROM {$this->db}.page_schemas WHERE crawl_id IN ({$in}){$notHidden} LIMIT 1 BY (crawl_id, page_id, schema_type))";
         }
         if ($table === 'html') {
-            return "(SELECT * FROM {$this->db}.html WHERE crawl_id IN ({$in}) LIMIT 1 BY (crawl_id, id))";
+            $notHidden = $hiddenIds ? " AND (crawl_id, id) NOT IN {$hiddenIds}" : '';
+            return "(SELECT * FROM {$this->db}.html WHERE crawl_id IN ({$in}){$notHidden} LIMIT 1 BY (crawl_id, id))";
         }
         // duplicate_clusters / redirect_chains: PG exposed a SERIAL `id`; CH names
         // it cluster_id / chain_id. Alias it so report SQL referencing `id` works.
@@ -242,6 +274,10 @@ class ChPdo
         }
         if ($table === 'redirect_chains') {
             return "(SELECT *, chain_id AS id FROM {$this->db}.redirect_chains WHERE crawl_id IN ({$in}))";
+        }
+        if ($table === 'links' && $hiddenIds) {
+            return "(SELECT * FROM {$this->db}.links WHERE crawl_id IN ({$in})"
+                . " AND (crawl_id, src) NOT IN {$hiddenIds} AND (crawl_id, target) NOT IN {$hiddenIds})";
         }
         // links = intentional multi-row.
         return "(SELECT * FROM {$this->db}.{$table} WHERE crawl_id IN ({$in}))";

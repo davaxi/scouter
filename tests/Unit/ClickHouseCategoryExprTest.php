@@ -67,3 +67,25 @@ it('escapes single quotes in category names and patterns', function () {
     expect($sql)->toContain("THEN 'O''Reilly'");
     expect($sql)->toContain("/o''r");
 });
+
+it('has no hidden condition when no segment is hidden', function () {
+    expect(makeCategoryExpr()->buildHiddenCond([
+        ['name' => 'blog', 'domain' => 'x.com', 'includes' => ['^/blog'], 'excludes' => []],
+    ]))->toBeNull();
+});
+
+it('matches the pages whose first matching segment is hidden', function () {
+    $cond = makeCategoryExpr()->buildHiddenCond([
+        ['name' => 'blog', 'domain' => 'x.com', 'includes' => ['^/blog'], 'excludes' => []],
+        ['name' => 'cf', 'domain' => 'x.com', 'includes' => ['^/cdn-cgi/'], 'excludes' => [], 'hidden' => true],
+        ['name' => 'rest', 'domain' => 'x.com', 'includes' => ['.*'], 'excludes' => []],
+    ]);
+
+    // First-match ids (as for category): a /blog page stays id 1 even if it
+    // also matched a later hidden rule.
+    expect($cond)->toStartWith('ifNull(CASE WHEN ');
+    expect($cond)->toEndWith(', 0) IN (2)');
+    expect($cond)->toContain("'(?i)^/cdn-cgi/'");
+    // Rules after the last hidden one can't change the outcome → trimmed.
+    expect($cond)->not->toContain("'(?i).*'");
+});

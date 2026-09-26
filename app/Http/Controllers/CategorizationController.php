@@ -80,6 +80,12 @@ class CategorizationController extends Controller
             $this->error('Crawl non associé à un projet');
         }
 
+        // Segments cochés « Exclure du rapport » : ils retirent des pages de TOUS les
+        // rapports et du score. Si l'ancienne ou la nouvelle config en contient, tout
+        // (pas seulement les fragments liés aux catégories) est à recalculer.
+        $hiddenInvolved = $this->hasHiddenSegment($categories)
+            || $this->hasHiddenSegment(\Spyc::YAMLLoadString((string) $this->currentYaml((int) $crawlId, (int) $projectId)));
+
         // PHASE 1: Save to project level
         $projectRepo = new \App\Database\ProjectRepository();
         $projectRepo->setCategorizationConfig($projectId, $yamlContent);
@@ -119,12 +125,24 @@ class CategorizationController extends Controller
         // (celui que l'utilisateur regarde) → son affichage juste après est rapide ET
         // frais. Les AUTRES crawls du projet sont rafraîchis en fond par le worker.
         try {
-            \App\Analysis\ReportPrecompute::recompute((int) $crawlId, true); // fragments catégorie-dépendants
+            \App\Analysis\ReportPrecompute::recompute((int) $crawlId, !$hiddenInvolved); // fragments catégorie-dépendants (tous si exclusion)
             $jm = new \App\Job\JobManager();
             $precomputeJobId = $jm->createJob($projectDir, 'Report Precompute', "precompute-reports-project:{$projectId}");
             $jm->updateJobStatus($precomputeJobId, 'queued');
         } catch (\Throwable $e) {
             error_log('[Categorization] update report precompute failed: ' . $e->getMessage());
+        }
+
+        // Score santé / pages indexables / erreurs critiques des crawls du projet :
+        // recalculés tout de suite (ClickHouse) avec les nouvelles exclusions.
+        if ($hiddenInvolved) {
+            try {
+                $this->db->prepare("UPDATE crawls SET health_score = NULL WHERE project_id = :p")
+                    ->execute([':p' => $projectId]);
+                \App\Analysis\CrawlStats::ensureFromClickHouse($projectCrawlIds);
+            } catch (\Throwable $e) {
+                error_log('[Categorization] health score refresh failed: ' . $e->getMessage());
+            }
         }
 
         // PHASE 3: Apply SYNCHRONOUSLY to the current crawl so the user sees
@@ -219,6 +237,34 @@ class CategorizationController extends Controller
         ], $jobId !== null
             ? "Catégorisation appliquée ({$currentCategorized} pages). Les " . count($otherCrawls) . " autre(s) crawl(s) du projet sont en cours de traitement en arrière-plan."
             : "Catégorisation appliquée ({$currentCategorized} pages).");
+    }
+
+    /** Whether a parsed YAML config has a segment flagged "Exclure du rapport". */
+    private function hasHiddenSegment($categories): bool
+    {
+        if (!is_array($categories)) {
+            return false;
+        }
+        foreach ($categories as $rules) {
+            if (is_array($rules) && filter_var($rules['hidden'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The YAML currently active for a crawl: per-crawl snapshot, else the project's. */
+    private function currentYaml(int $crawlId, int $projectId): ?string
+    {
+        $stmt = $this->db->prepare("SELECT config FROM categorization_config WHERE crawl_id = :c");
+        $stmt->execute([':c' => $crawlId]);
+        $yaml = $stmt->fetchColumn();
+        if (!$yaml) {
+            $stmt = $this->db->prepare("SELECT categorization_config FROM projects WHERE id = :p");
+            $stmt->execute([':p' => $projectId]);
+            $yaml = $stmt->fetchColumn();
+        }
+        return $yaml ? (string) $yaml : null;
     }
 
     /**
@@ -457,7 +503,8 @@ class CategorizationController extends Controller
         // Renvoyer du HTML comme l'ancien API
         header('Content-Type: text/html; charset=utf-8');
 
-        $pdo = $useCh ? new \App\Database\ChPdo((int)$crawlId) : $this->db;
+        // Segments page: keep the pages of segments flagged "Exclure du rapport".
+        $pdo = $useCh ? new \App\Database\ChPdo((int)$crawlId, null, true) : $this->db;
         $urlTableConfig = [
             'title' => '',
             'id' => 'categorize_table',

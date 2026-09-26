@@ -95,6 +95,44 @@ class CategoryExpr
         return "CASE " . implode(' ', $cases) . " ELSE NULL END";
     }
 
+    /**
+     * ClickHouse condition (over `url`) matching the pages whose segment — the
+     * FIRST matching rule, as for `category` — is flagged hidden ("Exclure du
+     * rapport"), or null when no segment is hidden.
+     */
+    public function buildHiddenCond(array $rules): ?string
+    {
+        $hiddenIds = [];
+        foreach ($rules as $i => $rule) {
+            if (!empty($rule['hidden'])) {
+                $hiddenIds[] = $i + 1;
+            }
+        }
+        if (empty($hiddenIds)) {
+            return null;
+        }
+        // Rules after the last hidden one can't change the outcome.
+        $rules = array_slice($rules, 0, max($hiddenIds));
+        return "ifNull(" . $this->buildIdExpr($rules) . ", 0) IN (" . implode(',', $hiddenIds) . ")";
+    }
+
+    /**
+     * SQL condition matching the hidden pages of the given crawls (each crawl
+     * uses its own rules), or null when none of them hides a segment. Meant to
+     * be negated in a WHERE over `pages` (needs `crawl_id` and `url`).
+     */
+    public function hiddenPagesCond(array $crawlIds): ?string
+    {
+        $parts = [];
+        foreach ($crawlIds as $id) {
+            $cond = $this->buildHiddenCond($this->rulesForCrawl((int) $id));
+            if ($cond !== null) {
+                $parts[] = "(crawl_id = " . (int) $id . " AND {$cond})";
+            }
+        }
+        return empty($parts) ? null : "(" . implode(' OR ', $parts) . ")";
+    }
+
     /** The match condition for one rule (domain + includes [- excludes]). */
     private function cond(array $rule): string
     {

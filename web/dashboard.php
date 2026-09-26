@@ -146,7 +146,10 @@ if ($useCh) {
     foreach ($categoriesMap as $row) {
         $categoryColors[$row['cat']] = $row['color'];
     }
-    $pdo = new \App\Database\ChPdo((int)$crawlId, $compareId ? (int)$compareId : null);
+    // La page Segments garde les pages des segments « Exclure du rapport » (on doit
+    // pouvoir voir ce qu'on exclut) ; tous les autres rapports les retirent.
+    $includeHidden = ($_GET['page'] ?? '') === 'categorize';
+    $pdo = new \App\Database\ChPdo((int)$crawlId, $compareId ? (int)$compareId : null, $includeHidden);
     $GLOBALS['chReportPdo'] = $pdo; // chart.php : icône SQL en dialecte ClickHouse
 } else {
     // Crawl pas encore migré → PG (qui a encore les données), catégorie live.

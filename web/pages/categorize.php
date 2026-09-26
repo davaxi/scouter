@@ -285,6 +285,15 @@ body {
     color: rgba(255, 255, 255, 0.6);
 }
 
+.categorize-panel:first-child .rule-hidden-toggle {
+    color: white;
+}
+
+.categorize-panel:first-child .rule-hidden-hint,
+.categorize-panel:first-child .rule-hidden-icon {
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .categorize-panel:first-child .rule-domain-input,
 .categorize-panel:first-child .rule-name-input {
     background: rgba(0, 0, 0, 0.2);
@@ -1364,6 +1373,45 @@ body {
     font-size: 20px;
 }
 
+/* Segment « Exclure du rapport » */
+.rule-card-hidden .rule-name {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.rule-hidden-icon {
+    font-size: 16px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.rule-hidden-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.rule-hidden-toggle input {
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.rule-hidden-label {
+    display: block;
+    font-weight: 600;
+}
+
+.rule-hidden-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+}
+
 .rule-color-picker {
     width: 18px;
     height: 18px;
@@ -2010,6 +2058,7 @@ body {
                 <li><strong>dom</strong> : <?= __('categorize.help_element_dom') ?></li>
                 <li><strong>include</strong> : <?= __('categorize.help_element_include') ?></li>
                 <li><strong>exclude</strong> : <?= __('categorize.help_element_exclude') ?></li>
+                <li><strong>hidden: true</strong> : <?= __('categorize.help_element_hidden') ?></li>
             </ul>
 
             <h3><?= __('categorize.help_examples_title') ?></h3>
@@ -2802,6 +2851,7 @@ function parseYamlToRules(yamlContent) {
                 name: trimmed.slice(0, -1),
                 dom: '',
                 color: '#aaaaaa',
+                hidden: false,
                 include: [],
                 exclude: []
             };
@@ -2818,6 +2868,10 @@ function parseYamlToRules(yamlContent) {
                 let colorVal = trimmed.substring(6).trim();
                 colorVal = colorVal.replace(/^["']|["']$/g, '');
                 currentRule.color = colorVal || '#aaaaaa';
+                currentSection = null;
+            }
+            else if (trimmed.startsWith('hidden:')) {
+                currentRule.hidden = /^(true|yes|on|1)$/i.test(trimmed.substring(7).trim());
                 currentSection = null;
             }
             else if (trimmed === 'include:') {
@@ -2850,6 +2904,9 @@ function rulesToYaml(rules) {
         yaml += `${rule.name}:\n`;
         yaml += `  color: "${rule.color || '#aaaaaa'}"\n`;
         yaml += `  dom: ${rule.dom}\n`;
+        if (rule.hidden) {
+            yaml += '  hidden: true\n';
+        }
         
         if (rule.include.length > 0) {
             yaml += '  include:\n';
@@ -2910,7 +2967,7 @@ function createRuleCard(rule, index) {
     const ruleColor = rule.color || '#aaaaaa';
     
     return `
-        <div class="rule-card" data-index="${index}" draggable="true">
+        <div class="rule-card${rule.hidden ? ' rule-card-hidden' : ''}" data-index="${index}" draggable="true">
             <div class="rule-card-header" onclick="toggleRuleCard(${index})">
                 <div class="rule-header-top">
                     <div class="rule-drag-handle" onmousedown="event.stopPropagation()">
@@ -2920,6 +2977,9 @@ function createRuleCard(rule, index) {
                            onclick="event.stopPropagation()" 
                            onchange="updateRuleColor(${index}, this.value)">
                     <span class="rule-name">${escapeHtml(rule.name)}</span>
+                    ${rule.hidden ? `
+                        <span class="material-symbols-outlined rule-hidden-icon" title="${escapeHtml(__('categorize.field_hidden'))}">visibility_off</span>
+                    ` : ''}
                     <span class="material-symbols-outlined rule-expand-icon">expand_more</span>
                 </div>
                 <div class="rule-header-bottom">
@@ -3005,6 +3065,14 @@ function createRuleCard(rule, index) {
                         </button>
                     </div>
                 </div>
+                <label class="rule-hidden-toggle">
+                    <input type="checkbox" ${rule.hidden ? 'checked' : ''}
+                           onchange="updateRuleHidden(${index}, this.checked)">
+                    <span>
+                        <span class="rule-hidden-label">${__('categorize.field_hidden')}</span>
+                        <span class="rule-hidden-hint">${__('categorize.field_hidden_hint')}</span>
+                    </span>
+                </label>
             </div>
         </div>
     `;
@@ -3092,6 +3160,27 @@ function updateRuleDom(index, value) {
 function updateRuleColor(index, value) {
     rulesData[index].color = value;
     syncVisualToCode();
+}
+
+// Toggle "Exclure du rapport"
+function updateRuleHidden(index, checked) {
+    rulesData[index].hidden = checked;
+    syncVisualToCode();
+    const card = document.querySelector(`.rule-card[data-index="${index}"]`);
+    if (card) {
+        card.classList.toggle('rule-card-hidden', checked);
+        const header = card.querySelector('.rule-header-top');
+        let icon = header.querySelector('.rule-hidden-icon');
+        if (checked && !icon) {
+            icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined rule-hidden-icon';
+            icon.title = __('categorize.field_hidden');
+            icon.textContent = 'visibility_off';
+            header.insertBefore(icon, header.querySelector('.rule-expand-icon'));
+        } else if (!checked && icon) {
+            icon.remove();
+        }
+    }
 }
 
 // Update pattern

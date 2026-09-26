@@ -28,7 +28,7 @@ class CategorizationService
      * Parse les catégories YAML en règles structurées
      *
      * @param array $categories Catégories parsées depuis YAML
-     * @return array Règles structurées [{name, domain, includes, excludes, color}]
+     * @return array Règles structurées [{name, domain, includes, excludes, color, hidden}]
      * @throws \InvalidArgumentException Si un pattern regex est invalide
      */
     public function parseRules(array $categories): array
@@ -77,6 +77,9 @@ class CategorizationService
                 'includes' => $includes,
                 'excludes' => $excludes,
                 'color' => $color,
+                // "Exclure du rapport" : les pages de ce segment sont retirées de
+                // tous les rapports et du score (cf. CategoryExpr::buildHiddenCond).
+                'hidden' => filter_var($catRules['hidden'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ];
         }
         return $rules;
