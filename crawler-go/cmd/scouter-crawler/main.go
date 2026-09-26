@@ -419,6 +419,9 @@ func runJob(ctx context.Context, pool *db.Pool, ch *db.CH, mgr *jobs.Manager, j 
 	var ppFailures []string
 	if dropPG {
 		milestone("ClickHouse is the sole store (CLICKHOUSE_DROP_PG=1) — skipping PostgreSQL post-processing")
+		if err := pp.SitemapAnalysisCH(ctx, ch); err != nil {
+			logf("sitemap analysis error: %v", err)
+		}
 	} else {
 		if err := pp.Run(ctx); err != nil {
 			ppFailures = append(ppFailures, "pg-postprocess")

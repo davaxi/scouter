@@ -47,12 +47,13 @@ class CrawlStats
 
         // pages est un ReplacingMergeTree → on déduplique (LIMIT 1 BY crawl_id,id)
         // AVANT d'agréger. title_status/h1_status/pri vivent dans page_metrics.
+        // depth >= 0 exclut les pages sitemap-only (depth=-1, in_crawl=false en PG).
         // Score 5 piliers + compliant (indexables) + critical_errors dans la même
         // passe. Repli pur-PHP (sans CH) : pcHealthScore() dans project-metrics.php.
         $sql = "
 WITH per AS (
   SELECT crawl_id, countIf(compliant=1 AND is_html=1) AS idx
-  FROM (SELECT crawl_id, id, compliant, is_html FROM pages WHERE crawl_id IN ($idList)
+  FROM (SELECT crawl_id, id, compliant, is_html FROM pages WHERE crawl_id IN ($idList) AND depth >= 0
         ORDER BY date DESC LIMIT 1 BY crawl_id, id)
   GROUP BY crawl_id
 ),
@@ -67,7 +68,7 @@ SELECT p.crawl_id AS crawl_id,
     + sumIf(m.pri, p.compliant=1 AND p.is_html=1)*100.0 / nullIf(sum(m.pri),0)
     + countIf(p.compliant=1 AND p.is_html=1 AND p.depth <= t.max_depth)*100.0 / nullIf(countIf(p.compliant=1 AND p.is_html=1),0)
   ) / 5) AS score
-FROM (SELECT crawl_id, id, compliant, is_html, crawled, word_count, depth, code FROM pages WHERE crawl_id IN ($idList)
+FROM (SELECT crawl_id, id, compliant, is_html, crawled, word_count, depth, code FROM pages WHERE crawl_id IN ($idList) AND depth >= 0
       ORDER BY date DESC LIMIT 1 BY crawl_id, id) p
 LEFT JOIN page_metrics m ON m.crawl_id = p.crawl_id AND m.id = p.id
 JOIN thr t ON t.crawl_id = p.crawl_id

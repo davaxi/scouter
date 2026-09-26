@@ -116,7 +116,8 @@ func (r *CHRunner) buildMetrics(ctx context.Context) error {
 
 	sql := `INSERT INTO ` + r.t("page_metrics") +
 		` (crawl_id, id, inlinks, pri, title_status, h1_status, metadesc_status, in_sitemap)
-		SELECT ` + cid + `, p.id, il.inlinks, pr.pr, st.title_status, st.h1_status, st.metadesc_status, 0
+		SELECT ` + cid + `, p.id, il.inlinks, pr.pr, st.title_status, st.h1_status, st.metadesc_status,
+			p.id IN (SELECT id FROM ` + r.t("sitemap_urls") + ` WHERE crawl_id = ` + cid + `)
 		FROM ` + r.pd() + ` p
 		LEFT JOIN ` + inlinksSub + ` il ON il.tid = p.id
 		LEFT JOIN ` + r.t("pr_cur_"+cid) + ` pr ON pr.id = p.id

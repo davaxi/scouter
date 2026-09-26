@@ -12,24 +12,23 @@ import (
 
 var smDomainRe = regexp.MustCompile(`(?i)https?://([^/?]+)`)
 
-// sitemapAnalysis ports PostProcessor::sitemapAnalysis: only on a cleanly
-// finished crawl, parse the configured sitemap(s), mark known pages in_sitemap,
-// insert sitemap-only placeholders, and fetch the new in-scope URLs (via the
-// SitemapFetch callback, which runs a skip-link-extraction crawl pass).
-func (r *Runner) sitemapAnalysis(ctx context.Context) error {
+// loadSitemap parses the crawl's configured sitemap(s), only on a cleanly
+// finished crawl. It returns the sitemap URLs keyed by page id plus the crawl's
+// allowed domains, or a nil map when there is nothing to do.
+func (r *Runner) loadSitemap(ctx context.Context) (map[string]string, []string, error) {
 	var status string
 	if err := r.pool.QueryRow(ctx, "SELECT status FROM crawls WHERE id=$1", r.crawlID).Scan(&status); err != nil {
-		return err
+		return nil, nil, err
 	}
 	switch status {
 	case "stopping", "stopped", "failed", "error":
-		return nil // deferred until clean completion
+		return nil, nil, nil // deferred until clean completion
 	}
 
 	var raw []byte
 	var domain string
 	if err := r.pool.QueryRow(ctx, "SELECT config, domain FROM crawls WHERE id=$1", r.crawlID).Scan(&raw, &domain); err != nil {
-		return err
+		return nil, nil, err
 	}
 	sitemapURLs := advancedStrings(raw, "sitemap_urls")
 	clean := sitemapURLs[:0]
@@ -39,21 +38,39 @@ func (r *Runner) sitemapAnalysis(ctx context.Context) error {
 		}
 	}
 	if len(clean) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 
 	result := analysis.NewSitemapParser().Parse(clean)
 	for _, e := range result.Errors {
 		r.logf("sitemap error: %s", e)
 	}
+	r.logf("sitemap: %d URLs from %d sitemap(s)", len(result.URLs), len(result.SitemapsVisited))
 	if len(result.URLs) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 
 	idToURL := make(map[string]string, len(result.URLs))
 	for _, u := range result.URLs {
 		idToURL[analysis.PageID(u)] = u
 	}
+	allowed := generalStrings(raw, "domains")
+	if len(allowed) == 0 {
+		allowed = []string{domain}
+	}
+	return idToURL, allowed, nil
+}
+
+// sitemapAnalysis ports PostProcessor::sitemapAnalysis: parse the configured
+// sitemap(s), mark known pages in_sitemap, insert sitemap-only placeholders, and
+// fetch the new in-scope URLs (via the SitemapFetch callback, which runs a
+// skip-link-extraction crawl pass).
+func (r *Runner) sitemapAnalysis(ctx context.Context) error {
+	idToURL, allowed, err := r.loadSitemap(ctx)
+	if err != nil || idToURL == nil {
+		return err
+	}
+
 	allIDs := make([]string, 0, len(idToURL))
 	for id := range idToURL {
 		allIDs = append(allIDs, id)
@@ -85,11 +102,6 @@ func (r *Runner) sitemapAnalysis(ctx context.Context) error {
 		if _, err := r.pool.Exec(ctx, "UPDATE pages SET in_sitemap = TRUE WHERE crawl_id=$1 AND id = ANY($2)", r.crawlID, chunk); err != nil {
 			return err
 		}
-	}
-
-	allowed := generalStrings(raw, "domains")
-	if len(allowed) == 0 {
-		allowed = []string{domain}
 	}
 
 	var newInScopeURLs []string

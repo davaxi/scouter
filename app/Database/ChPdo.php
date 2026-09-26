@@ -219,7 +219,8 @@ class ChPdo
             $joins .= " LEFT JOIN (SELECT crawl_id AS _gcid, id AS _gid, generation "
                 . "FROM {$this->db}.page_generation WHERE crawl_id IN ({$in}) LIMIT 1 BY (crawl_id, id)) g ON g._gcid = p.crawl_id AND g._gid = p.id";
         }
-        $cols[] = "toUInt8(1) AS in_crawl";
+        // Sitemap-only pages are stored at depth=-1 (as in PG, where they have in_crawl=false).
+        $cols[] = "toUInt8(p.depth >= 0) AS in_crawl";
         return "(SELECT " . implode(', ', $cols)
             . " FROM (SELECT * FROM {$this->db}.pages WHERE crawl_id IN ({$in}) LIMIT 1 BY (crawl_id, id)) p"
             . $joins . ")";
