@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html/charset"
 )
 
 // SitemapParser ports app/Sitemap/SitemapParser.php with identical safety limits.
@@ -97,6 +99,9 @@ func (p *SitemapParser) visit(url string, depth int) {
 		}
 		body = dec
 	}
+	// A UTF-8 BOM would make the XML look like a plain-text list (first byte
+	// isn't '<'), silently yielding zero URLs.
+	body = bytes.TrimPrefix(body, []byte{0xEF, 0xBB, 0xBF})
 	p.result.SitemapsVisited = append(p.result.SitemapsVisited, url)
 
 	if looksLikeText(url, body) {
@@ -153,6 +158,8 @@ func (p *SitemapParser) visit(url string, depth int) {
 func parseSitemapXML(body []byte) (root string, locs []string, err error) {
 	dec := xml.NewDecoder(bytes.NewReader(body))
 	dec.Strict = false
+	// Honour a non-UTF-8 encoding declared in the prolog (e.g. ISO-8859-1).
+	dec.CharsetReader = charset.NewReaderLabel
 	var depth int
 	var inLoc bool
 	var cur strings.Builder

@@ -43,6 +43,9 @@ func (r *Runner) sitemapAnalysis(ctx context.Context) error {
 	}
 
 	result := analysis.NewSitemapParser().Parse(clean)
+	for _, e := range result.Errors {
+		r.logf("sitemap error: %s", e)
+	}
 	if len(result.URLs) == 0 {
 		return nil
 	}
